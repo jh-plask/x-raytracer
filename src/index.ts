@@ -3,86 +3,45 @@ import {
   Scene,
   FreeCamera,
   Vector3,
-  HemisphericLight,
+  Vector2,
   MeshBuilder,
   ShaderMaterial,
   Effect,
 } from "@babylonjs/core";
 import {
-  rayTracerFragmentShader,
-  rayTracerVertexShader,
-} from "./shader/rayTracer.fragment";
-import { BVH } from "./core/picking/bvh";
+  vertexShader,
+  fragmentShader,
+} from "./shader/rayTracerShader";
+
 class App {
   private engine: Engine;
   private scene: Scene;
   private camera: FreeCamera;
 
   constructor() {
-    console.log("App constructor started");
-
     const canvas =
       document.createElement("canvas");
-    canvas.id = "renderCanvas";
     document.body.appendChild(canvas);
-    console.log("Canvas created");
-
+    canvas.id = "renderCanvas";
     this.engine = new Engine(canvas, true);
-    console.log("Engine created");
-
     this.scene = new Scene(this.engine);
-    console.log("Scene created");
 
     this.camera = new FreeCamera(
       "camera",
-      new Vector3(0, 5, -10),
+      new Vector3(0, 0, -5),
       this.scene
     );
     this.camera.setTarget(Vector3.Zero());
     this.camera.attachControl(canvas, true);
-    console.log("Camera set up");
-
-    new HemisphericLight(
-      "light",
-      new Vector3(0, 1, 0),
-      this.scene
-    );
-    console.log("Light created");
-
-    const meshes = [
-      MeshBuilder.CreateBox(
-        "box1",
-        { size: 1 },
-        this.scene
-      ),
-      MeshBuilder.CreateSphere(
-        "sphere",
-        { diameter: 1 },
-        this.scene
-      ),
-      MeshBuilder.CreateGround(
-        "ground",
-        { width: 6, height: 6 },
-        this.scene
-      ),
-    ];
-    meshes[0].position.set(-1, 0, 0);
-    meshes[1].position.set(1, 0, 0);
-
-    const bvh = new BVH(meshes);
-    const bvhTexture = bvh.createBVHTexture(
-      bvh,
-      this.scene
-    );
 
     Effect.ShadersStore["rayTracerVertexShader"] =
-      rayTracerVertexShader;
+      vertexShader;
     Effect.ShadersStore[
       "rayTracerFragmentShader"
-    ] = rayTracerFragmentShader;
+    ] = fragmentShader;
 
-    const rayTracerMaterial = new ShaderMaterial(
-      "rayTracer",
+    const material = new ShaderMaterial(
+      "rayTracerMaterial",
       this.scene,
       {
         vertex: "rayTracer",
@@ -91,46 +50,78 @@ class App {
       {
         attributes: ["position", "uv"],
         uniforms: [
-          "world",
-          "worldView",
-          "worldViewProjection",
-          "view",
-          "projection",
           "cameraPosition",
+          "resolution",
+          "spheres",
+          "sphereCount",
         ],
-        samplers: ["bvhTexture"],
       }
     );
 
-    rayTracerMaterial.setTexture(
-      "bvhTexture",
-      bvhTexture
+    const plane = MeshBuilder.CreatePlane(
+      "plane",
+      { size: 2 },
+      this.scene
     );
-    rayTracerMaterial.setFloat(
-      "bvhTextureSize",
-      bvh.flatNodes.length / 4
-    );
+    plane.material = material;
 
-    const fullscreenQuad =
-      MeshBuilder.CreatePlane(
-        "fullscreenQuad",
-        { width: 2, height: 2 },
-        this.scene
-      );
-    fullscreenQuad.material = rayTracerMaterial;
+    // Set up spheres
+    const spheres = [
+      {
+        center: new Vector3(0, 0, 0),
+        radius: 1.0,
+        color: new Vector3(1, 0, 0),
+      },
+      {
+        center: new Vector3(-1.5, 0, -1),
+        radius: 0.5,
+        color: new Vector3(0, 1, 0),
+      },
+      {
+        center: new Vector3(1.5, 0, -1),
+        radius: 0.5,
+        color: new Vector3(0, 0, 1),
+      },
+    ];
 
     this.engine.runRenderLoop(() => {
-      rayTracerMaterial.setVector3(
+      material.setVector3(
         "cameraPosition",
         this.camera.position
       );
+      material.setVector2(
+        "resolution",
+        new Vector2(
+          this.engine.getRenderWidth(),
+          this.engine.getRenderHeight()
+        )
+      );
+
+      // Update sphere uniforms
+      for (let i = 0; i < spheres.length; i++) {
+        material.setVector3(
+          `spheres[${i}].center`,
+          spheres[i].center
+        );
+        material.setFloat(
+          `spheres[${i}].radius`,
+          spheres[i].radius
+        );
+        material.setVector3(
+          `spheres[${i}].color`,
+          spheres[i].color
+        );
+      }
+      material.setInt(
+        "sphereCount",
+        spheres.length
+      );
+
       this.scene.render();
     });
     window.addEventListener("resize", () => {
       this.engine.resize();
     });
-
-    console.log("App constructor finished");
   }
 }
 

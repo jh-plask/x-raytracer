@@ -5,6 +5,7 @@ import {
   RawTexture,
   Texture,
   Engine,
+  VertexBuffer,
 } from "@babylonjs/core";
 
 /**
@@ -47,10 +48,62 @@ class BVHNode {
 export class BVH {
   root: BVHNode | null = null;
   flatNodes: Float32Array = new Float32Array(0);
+  triangles: Float32Array = new Float32Array(0);
 
   constructor(meshes: Mesh[]) {
+    this.buildTriangleList(meshes);
     this.build(meshes);
     this.flatten();
+  }
+
+  private buildTriangleList(meshes: Mesh[]) {
+    let triangleCount = 0;
+    meshes.forEach((mesh) => {
+      triangleCount += mesh.getTotalIndices() / 3;
+    });
+
+    this.triangles = new Float32Array(
+      triangleCount * 9
+    );
+    let offset = 0;
+
+    meshes.forEach((mesh) => {
+      const positions = mesh.getVerticesData(
+        VertexBuffer.PositionKind
+      )!;
+      const indices = mesh.getIndices()!;
+      const worldMatrix =
+        mesh.computeWorldMatrix(true);
+
+      for (
+        let i = 0;
+        i < indices.length;
+        i += 3
+      ) {
+        for (let j = 0; j < 3; j++) {
+          const vertexIndex = indices[i + j];
+          const vertex = new Vector3(
+            positions[vertexIndex * 3],
+            positions[vertexIndex * 3 + 1],
+            positions[vertexIndex * 3 + 2]
+          );
+          const transformedVertex =
+            Vector3.TransformCoordinates(
+              vertex,
+              worldMatrix
+            );
+          this.triangles.set(
+            [
+              transformedVertex.x,
+              transformedVertex.y,
+              transformedVertex.z,
+            ],
+            offset
+          );
+          offset += 3;
+        }
+      }
+    });
   }
 
   private build(meshes: Mesh[]) {
@@ -114,7 +167,7 @@ export class BVH {
   private flattenRecursive(
     node: BVHNode | null,
     nodes: number[]
-  ) {
+  ): number {
     if (!node) return -1;
 
     const nodeIndex = nodes.length / 8;
@@ -145,14 +198,24 @@ export class BVH {
     return nodeIndex;
   }
 
-createBVHTexture(
-    bvh: BVH,
-    scene: Scene
-  ) {
+  createBVHTexture(bvh: BVH, scene: Scene) {
     return RawTexture.CreateRGBATexture(
       bvh.flatNodes,
       bvh.flatNodes.length / 4,
       1,
+      scene,
+      false,
+      false,
+      Texture.NEAREST_SAMPLINGMODE,
+      Engine.TEXTURETYPE_FLOAT
+    );
+  }
+
+  createTrianglesTexture(bvh: BVH, scene: Scene) {
+    return RawTexture.CreateRGBATexture(
+      bvh.triangles,
+      bvh.triangles.length / 3,
+      3,
       scene,
       false,
       false,

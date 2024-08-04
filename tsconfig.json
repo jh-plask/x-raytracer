@@ -9,5 +9,5 @@
     "outDir": "./dist",
     "rootDir": "./src"
   },
-  "include": ["src/**/*", "src/**/*.glsl", "src/shader.glsl.d.ts"],
+  "include": ["src/**/*", "src/**/**/*.glsl", "src/shader/glsl.d.ts"],
 }
