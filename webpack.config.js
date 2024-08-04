@@ -1,7 +1,7 @@
 const path = require('path');
 
 module.exports = {
-    mode: 'development',
+  mode: 'development',
   entry: './src/index.ts',
   module: {
     rules: [
@@ -10,6 +10,11 @@ module.exports = {
         use: 'ts-loader',
         exclude: /node_modules/,
       },
+      {
+        test: /\.glsl$/,
+        use: 'raw-loader',
+        exclude: /node_modules/
+      }
     ],
   },
   resolve: {

@@ -1,4 +1,11 @@
-import { Vector3, Mesh } from "@babylonjs/core";
+import {
+  Vector3,
+  Mesh,
+  Scene,
+  RawTexture,
+  Texture,
+  Engine,
+} from "@babylonjs/core";
 
 /**
  * Axis-aligned bounding box.
@@ -20,39 +27,36 @@ class AABB {
 }
 
 /**
- * Node in a binary BVH tree.
+ * Bounding volume hierarchy node.
  */
 class BVHNode {
   aabb: AABB;
   left: BVHNode | null = null;
   right: BVHNode | null = null;
-  mesh: Mesh | null = null;
+  meshIndex: number = -1;
 
   constructor(
     aabb: AABB,
-    mesh: Mesh | null = null
+    meshIndex: number = -1
   ) {
     this.aabb = aabb;
-    this.mesh = mesh;
+    this.meshIndex = meshIndex;
   }
 }
 
-/**
- * Binary BVH tree.
- */
-class BVH {
+export class BVH {
   root: BVHNode | null = null;
+  flatNodes: Float32Array = new Float32Array(0);
 
   constructor(meshes: Mesh[]) {
     this.build(meshes);
+    this.flatten();
   }
 
   private build(meshes: Mesh[]) {
-    if (meshes.length === 0) return;
-
     const nodes = meshes.map(
-      (mesh) =>
-        new BVHNode(AABB.fromMesh(mesh), mesh)
+      (mesh, index) =>
+        new BVHNode(AABB.fromMesh(mesh), index)
     );
     this.root = this.buildRecursive(nodes);
   }
@@ -77,19 +81,21 @@ class BVH {
       nodes.slice(mid)
     );
 
-    const combinedAABB = this.combineAABB(
-      left.aabb,
-      right.aabb
+    const parent = new BVHNode(
+      this.combineAABB(left.aabb, right.aabb)
     );
-    const parent = new BVHNode(combinedAABB);
     parent.left = left;
     parent.right = right;
 
     return parent;
   }
 
+  /**
+   * Choose the axis to split the nodes along.
+   * @param nodes
+   * @returns
+   */
   private chooseAxis(nodes: BVHNode[]): number {
-    // Simple axis choice: alternate between x, y, and z
     return nodes.length % 3;
   }
 
@@ -98,6 +104,60 @@ class BVH {
     const max = Vector3.Maximize(a.max, b.max);
     return new AABB(min, max);
   }
-}
 
-export { BVH, BVHNode, AABB };
+  private flatten() {
+    const nodes: number[] = [];
+    this.flattenRecursive(this.root, nodes);
+    this.flatNodes = new Float32Array(nodes);
+  }
+
+  private flattenRecursive(
+    node: BVHNode | null,
+    nodes: number[]
+  ) {
+    if (!node) return -1;
+
+    const nodeIndex = nodes.length / 8;
+    nodes.push(
+      node.aabb.min.x,
+      node.aabb.min.y,
+      node.aabb.min.z,
+      node.meshIndex,
+      node.aabb.max.x,
+      node.aabb.max.y,
+      node.aabb.max.z,
+      0
+    );
+
+    if (node.left && node.right) {
+      const leftIndex = this.flattenRecursive(
+        node.left,
+        nodes
+      );
+      const rightIndex = this.flattenRecursive(
+        node.right,
+        nodes
+      );
+      nodes[nodeIndex * 8 + 7] = leftIndex;
+      nodes[nodeIndex * 8 + 3] = rightIndex;
+    }
+
+    return nodeIndex;
+  }
+
+createBVHTexture(
+    bvh: BVH,
+    scene: Scene
+  ) {
+    return RawTexture.CreateRGBATexture(
+      bvh.flatNodes,
+      bvh.flatNodes.length / 4,
+      1,
+      scene,
+      false,
+      false,
+      Texture.NEAREST_SAMPLINGMODE,
+      Engine.TEXTURETYPE_FLOAT
+    );
+  }
+}

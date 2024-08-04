@@ -12,6 +12,7 @@
   "devDependencies": {
     "@babylonjs/core": "^7.18.0",
     "@babylonjs/materials": "^7.18.0",
+    "raw-loader": "^4.0.2",
     "ts-loader": "^9.5.1",
     "typescript": "^5.5.4",
     "webpack": "^5.93.0",
